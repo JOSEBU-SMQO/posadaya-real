@@ -7,7 +7,9 @@ function Login() {
   const navigate = useNavigate()
   const { session, cargando } = useAuth()
 
-  const [email, setEmail] = useState('')
+  // Correo del dueño pre-rellenado para agilizar el acceso;
+  // se puede editar y Supabase Auth es quien valida las credenciales.
+  const [email, setEmail] = useState('whatjess90@gmail.com')
   const [password, setPassword] = useState('')
   const [error, setError] = useState(null)
   const [enviando, setEnviando] = useState(false)
