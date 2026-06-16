@@ -12,8 +12,15 @@ const FORM_VACIO = {
 }
 
 // Teléfono de la posada en formato internacional para wa.me
-// (0412-9521225 → +58 412 9521225). wa.me exige el código de país sin "+" ni "0".
+// (wa.me exige el código de país sin "+" ni "0"). Cámbialo por el real.
 const TELEFONO_WHATSAPP = '584129521225'
+
+// Datos de pago móvil. La tabla 'posadas' solo guarda el teléfono, así que
+// banco y cédula van aquí (cámbialos por los reales del dueño).
+const DATOS_PAGO_MOVIL = {
+  banco: 'Banco de Venezuela — 0102',
+  cedula: 'V-12.345.678',
+}
 
 function Reservar() {
   // La habitación se identifica por UUID en la ruta (/reservar/:id).
@@ -21,14 +28,15 @@ function Reservar() {
 
   const [habitacion, setHabitacion] = useState(null)
   const [tasaCambio, setTasaCambio] = useState(null)
+  const [telefonoPosada, setTelefonoPosada] = useState(null)
   const [cargando, setCargando] = useState(true)
 
   const [form, setForm] = useState(FORM_VACIO)
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState(null)
+  const [mostrarPago, setMostrarPago] = useState(false)
   const [exito, setExito] = useState(false)
-  // Datos de la reserva confirmada (para el resumen + WhatsApp), ya que
-  // limpiamos el formulario tras guardar.
+  // Datos de la reserva confirmada (para el resumen + WhatsApp).
   const [confirmacion, setConfirmacion] = useState(null)
 
   // Disponibilidad según las fechas elegidas:
@@ -58,15 +66,18 @@ function Reservar() {
       }
       setHabitacion(data)
 
-      // 2) Traemos la tasa_cambio de su posada en una consulta aparte
+      // 2) Traemos tasa_cambio y teléfono de su posada en consulta aparte
       //    (así no dependemos de la relación de clave foránea en PostgREST).
       if (data.posada_id) {
         const { data: posada } = await supabase
           .from('posadas')
-          .select('tasa_cambio')
+          .select('tasa_cambio, telefono')
           .eq('id', data.posada_id)
           .maybeSingle()
-        if (activo && posada) setTasaCambio(Number(posada.tasa_cambio))
+        if (activo && posada) {
+          setTasaCambio(Number(posada.tasa_cambio))
+          setTelefonoPosada(posada.telefono)
+        }
       }
 
       setCargando(false)
@@ -90,14 +101,20 @@ function Reservar() {
   const total =
     habitacion && noches > 0 ? noches * Number(habitacion.precio_noche) : 0
 
+  // Total en bolívares usando la tasa_cambio cargada de la posada.
+  const totalBs = total > 0 && tasaCambio ? total * tasaCambio : 0
+
+  // Formatea cantidades en bolívares con separadores de miles.
+  const formatoBs = (valor) =>
+    valor.toLocaleString('es-VE', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })
+
   // Consulta si la habitación está ocupada en un rango de fechas.
-  // Réplica de:
-  //   SELECT * FROM reservas
-  //   WHERE habitacion_id = X
-  //     AND NOT (fecha_entrada >= salida OR fecha_salida <= entrada)
-  // que por las leyes de De Morgan equivale a:
-  //     fecha_entrada < salida  AND  fecha_salida > entrada
-  // Consultamos la vista segura 'reservas_ocupacion' (no expone al huésped).
+  // Equivale a:  SELECT * FROM reservas WHERE habitacion_id = X
+  //   AND NOT (fecha_entrada >= salida OR fecha_salida <= entrada)
+  // que por De Morgan es: fecha_entrada < salida AND fecha_salida > entrada.
   // Devuelve: 'ocupada' | 'libre' | 'error'.
   async function consultarOcupacion(entrada, salida) {
     const { data, error } = await supabase
@@ -132,22 +149,13 @@ function Reservar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [habitacion, form.llegada, form.salida, noches])
 
-  // Total en bolívares usando la tasa_cambio cargada de la posada.
-  const totalBs = total > 0 && tasaCambio ? total * tasaCambio : 0
-
-  // Formatea cantidades en bolívares con separadores de miles.
-  const formatoBs = (valor) =>
-    valor.toLocaleString('es-VE', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })
-
   const handleChange = (e) => {
     const { name, value } = e.target
     setForm((prev) => ({ ...prev, [name]: value }))
   }
 
-  const handleSubmit = async (e) => {
+  // Paso 1: validar datos y pasar a la pantalla de pago (aún NO guarda).
+  const handleIrAPago = (e) => {
     e.preventDefault()
     setError(null)
 
@@ -159,15 +167,26 @@ function Reservar() {
       setError('Revisa las fechas: la salida debe ser posterior a la llegada.')
       return
     }
+    if (disponibilidad === 'ocupada') {
+      setError('🚨 ¡ALERTA! Estas fechas ya están ocupadas por otro huésped')
+      return
+    }
 
+    setMostrarPago(true)
+  }
+
+  // Paso 2: el huésped ya pagó y escribió su referencia. Aquí SÍ guardamos
+  // la reserva (con verificación final) y abrimos WhatsApp.
+  const handleConfirmarPago = async () => {
+    setError(null)
     setEnviando(true)
 
-    // Verificación final UNA ÚLTIMA VEZ justo antes de guardar, por si las
-    // fechas se ocuparon mientras el usuario llenaba el formulario.
+    // Verificación final justo antes de guardar.
     const estadoFinal = await consultarOcupacion(form.llegada, form.salida)
     if (estadoFinal === 'ocupada') {
       setEnviando(false)
       setDisponibilidad('ocupada')
+      setMostrarPago(false)
       setError('🚨 ¡ALERTA! Estas fechas ya están ocupadas por otro huésped')
       return
     }
@@ -188,30 +207,28 @@ function Reservar() {
       return
     }
 
-    // Guardamos un resumen antes de limpiar el formulario.
-    setConfirmacion({
+    const datos = {
       nombre: form.nombre,
       habitacion: habitacion.nombre,
       total,
       totalBs,
       referencia: form.referencia.trim(),
-    })
+    }
+    setConfirmacion(datos)
     setExito(true)
-    setForm(FORM_VACIO)
+
+    // Abrimos WhatsApp aprovechando que esto viene del clic del usuario.
+    window.open(enlaceWhatsApp(datos), '_blank', 'noopener,noreferrer')
   }
 
-  // Construye el enlace de WhatsApp con un mensaje automático.
+  // Mensaje automático de WhatsApp con el formato pedido.
   const enlaceWhatsApp = (c) => {
-    const lineas = [
-      `Hola, soy ${c.nombre}.`,
-      `He reservado la habitación: ${c.habitacion}.`,
-      `Total a pagar: $${c.total} USD` +
-        (c.totalBs ? ` (Bs ${formatoBs(c.totalBs)})` : ''),
-      c.referencia ? `Referencia bancaria: ${c.referencia}` : null,
-    ].filter(Boolean)
-    return `https://wa.me/${TELEFONO_WHATSAPP}?text=${encodeURIComponent(
-      lineas.join('\n'),
-    )}`
+    const texto =
+      `Hola, acabo de reservar la habitación ${c.habitacion} ` +
+      `por un total de $${c.total}. Mi referencia es ${
+        c.referencia || '(pendiente)'
+      }.`
+    return `https://wa.me/${TELEFONO_WHATSAPP}?text=${encodeURIComponent(texto)}`
   }
 
   return (
@@ -259,20 +276,21 @@ function Reservar() {
             </Link>
           </div>
         ) : exito && confirmacion ? (
+          /* ---------- Pantalla final: reserva registrada ---------- */
           <div className="rounded-2xl bg-white p-6 shadow-md ring-1 ring-emerald-200 sm:p-8">
             <h2 className="text-xl font-bold text-emerald-700">
-              ¡Reserva confirmada! 🎉
+              ¡Reserva registrada! 🎉
             </h2>
             <p className="mt-2 text-slate-600">
-              Hemos registrado tu reserva para{' '}
-              <span className="font-semibold">{confirmacion.habitacion}</span>.
+              Tu reserva para{' '}
+              <span className="font-semibold">{confirmacion.habitacion}</span>{' '}
+              quedó en estado <span className="font-semibold">pendiente</span>.
             </p>
 
-            {/* Resumen con conversión de moneda */}
             <div className="mt-4 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
               <div className="flex items-baseline justify-between gap-2">
                 <span className="text-sm font-semibold text-slate-700">
-                  Total a pagar
+                  Total
                 </span>
                 <span className="text-right">
                   <span className="block text-xl font-bold text-slate-900">
@@ -293,18 +311,16 @@ function Reservar() {
             </div>
 
             <p className="mt-4 text-sm text-slate-600">
-              Envíanos el comprobante por WhatsApp para confirmar tu pago:
+              Si WhatsApp no se abrió solo, pulsa el botón:
             </p>
-
-            <div className="mt-4 flex flex-wrap gap-3">
-              {/* Botón verde de WhatsApp */}
+            <div className="mt-3 flex flex-wrap gap-3">
               <a
                 href={enlaceWhatsApp(confirmacion)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700 active:scale-[0.98]"
+                className="inline-flex items-center gap-2 rounded-lg bg-green-500 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-green-500/40 transition hover:bg-green-600 active:scale-[0.98]"
               >
-                💬 Enviar pago por WhatsApp
+                💬 Avisar por WhatsApp
               </a>
               <Link
                 to="/"
@@ -314,9 +330,84 @@ function Reservar() {
               </Link>
             </div>
           </div>
+        ) : mostrarPago ? (
+          /* ---------- Paso final: pago móvil + referencia ---------- */
+          <div className="rounded-2xl bg-white p-5 shadow-md ring-1 ring-slate-200 sm:p-8">
+            <div className="rounded-xl bg-emerald-50 p-4 ring-1 ring-emerald-200">
+              <h2 className="text-lg font-bold text-emerald-800 sm:text-xl">
+                💰 ¡Paso Final!
+              </h2>
+              <p className="mt-1 text-sm text-emerald-700">
+                Realiza el pago móvil y escribe el número de referencia.
+              </p>
+            </div>
+
+            {/* Datos para el pago móvil */}
+            <dl className="mt-5 divide-y divide-slate-100 overflow-hidden rounded-xl ring-1 ring-slate-200">
+              <DatoPago etiqueta="Banco" valor={DATOS_PAGO_MOVIL.banco} />
+              <DatoPago
+                etiqueta="Teléfono"
+                valor={telefonoPosada || '0412-9521225'}
+              />
+              <DatoPago etiqueta="Cédula / RIF" valor={DATOS_PAGO_MOVIL.cedula} />
+              <DatoPago
+                etiqueta="Monto"
+                valor={
+                  totalBs > 0
+                    ? `$${total} USD  ·  Bs ${formatoBs(totalBs)}`
+                    : `$${total} USD`
+                }
+              />
+            </dl>
+
+            {/* Referencia del pago */}
+            <div className="mt-5">
+              <label
+                htmlFor="referencia"
+                className="block text-sm font-semibold text-slate-700"
+              >
+                Número de referencia del pago móvil
+              </label>
+              <input
+                id="referencia"
+                name="referencia"
+                type="text"
+                value={form.referencia}
+                onChange={handleChange}
+                placeholder="Ej. 0012345678"
+                className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+              />
+            </div>
+
+            {error && (
+              <p className="mt-5 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200">
+                {error}
+              </p>
+            )}
+
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={handleConfirmarPago}
+                disabled={enviando}
+                className="inline-flex items-center gap-2 rounded-lg bg-green-500 px-5 py-3 text-base font-bold text-white shadow-lg shadow-green-500/40 transition hover:bg-green-600 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {enviando ? 'Guardando…' : '💬 Avisar por WhatsApp'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setMostrarPago(false)}
+                disabled={enviando}
+                className="inline-flex items-center rounded-lg bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-200 disabled:opacity-60"
+              >
+                ← Volver
+              </button>
+            </div>
+          </div>
         ) : (
+          /* ---------- Paso 1: datos de la reserva ---------- */
           <form
-            onSubmit={handleSubmit}
+            onSubmit={handleIrAPago}
             className="rounded-2xl bg-white p-5 shadow-md ring-1 ring-slate-200 sm:p-8"
           >
             {/* Fechas */}
@@ -414,25 +505,6 @@ function Reservar() {
               </div>
             </div>
 
-            {/* Reporte de pago */}
-            <div className="mt-5">
-              <label
-                htmlFor="referencia"
-                className="block text-sm font-semibold text-slate-700"
-              >
-                Número de referencia bancaria
-              </label>
-              <input
-                id="referencia"
-                name="referencia"
-                type="text"
-                value={form.referencia}
-                onChange={handleChange}
-                placeholder="Ej. 0012345678 (del pago móvil / transferencia)"
-                className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
-              />
-            </div>
-
             {/* Tasa de cambio (traída de la tabla posadas) */}
             <div className="mt-5">
               <label
@@ -450,7 +522,7 @@ function Reservar() {
               />
             </div>
 
-            {/* Desglose del total */}
+            {/* Desglose del total en $ y Bs */}
             {noches > 0 && (
               <div className="mt-5 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
                 <p className="text-sm text-slate-600">
@@ -495,7 +567,7 @@ function Reservar() {
             {disponibilidad === 'error' && (
               <p className="mt-5 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">
                 No pudimos comprobar la disponibilidad. Por seguridad, el botón
-                queda bloqueado. (¿Está aplicada la migración de la vista
+                queda bloqueado. (¿Está aplicada la vista
                 <code className="mx-1">reservas_ocupacion</code> en Supabase?)
               </p>
             )}
@@ -508,7 +580,6 @@ function Reservar() {
 
             {(() => {
               const bloqueado =
-                enviando ||
                 disponibilidad === 'ocupada' ||
                 disponibilidad === 'verificando' ||
                 disponibilidad === 'error'
@@ -522,13 +593,24 @@ function Reservar() {
                       : 'bg-emerald-600 text-white hover:bg-emerald-700'
                   }`}
                 >
-                  {enviando ? 'Confirmando…' : 'Confirmar reserva'}
+                  Confirmar reserva
                 </button>
               )
             })()}
           </form>
         )}
       </main>
+    </div>
+  )
+}
+
+function DatoPago({ etiqueta, valor }) {
+  return (
+    <div className="flex items-center justify-between gap-3 bg-white px-4 py-3">
+      <dt className="text-sm text-slate-500">{etiqueta}</dt>
+      <dd className="text-right text-sm font-semibold text-slate-900">
+        {valor}
+      </dd>
     </div>
   )
 }

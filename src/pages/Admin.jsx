@@ -26,7 +26,9 @@ function Admin() {
     setCargando(true)
     setError(null)
 
-    const [habs, posadas, resv] = await Promise.all([
+    // Sin selects embebidos: cargamos cada tabla por separado y cruzamos
+    // los datos en JS (no dependemos de claves foráneas en PostgREST).
+    const [habs, posadas, resv, hues] = await Promise.all([
       supabase
         .from('habitaciones')
         .select('id, nombre, descripcion, precio_noche, capacidad, imagen_url')
@@ -35,9 +37,10 @@ function Admin() {
       supabase
         .from('reservas')
         .select(
-          'id, fecha_entrada, fecha_salida, estado, total_pagar, referencia, habitaciones (nombre), huespedes (nombre, telefono)',
+          'id, habitacion_id, huesped_id, fecha_entrada, fecha_salida, estado, total_pagar, referencia',
         )
         .order('created_at', { ascending: false }),
+      supabase.from('huespedes').select('id, nombre, telefono'),
     ])
 
     if (habs.error) {
@@ -47,7 +50,17 @@ function Admin() {
     }
 
     if (!resv.error) {
-      setReservas(resv.data)
+      // Mapas id → nombre/datos para cruzar con las reservas.
+      const mapaHab = new Map((habs.data ?? []).map((h) => [h.id, h]))
+      const mapaHues = new Map((hues.data ?? []).map((g) => [g.id, g]))
+      setReservas(
+        resv.data.map((r) => ({
+          ...r,
+          habitacionNombre: mapaHab.get(r.habitacion_id)?.nombre ?? '—',
+          huespedNombre: mapaHues.get(r.huesped_id)?.nombre ?? '—',
+          huespedTelefono: mapaHues.get(r.huesped_id)?.telefono ?? '—',
+        })),
+      )
     }
 
     if (!posadas.error && posadas.data.length > 0) {
@@ -351,13 +364,13 @@ function Admin() {
                   {reservas.map((r) => (
                     <tr key={r.id}>
                       <td className="px-5 py-4 font-medium text-slate-900">
-                        {r.huespedes?.nombre ?? '—'}
+                        {r.huespedNombre}
                       </td>
                       <td className="px-5 py-4 text-slate-600">
-                        {r.huespedes?.telefono ?? '—'}
+                        {r.huespedTelefono}
                       </td>
                       <td className="px-5 py-4 text-slate-600">
-                        {r.habitaciones?.nombre ?? '—'}
+                        {r.habitacionNombre}
                       </td>
                       <td className="px-5 py-4 text-slate-600">
                         {r.fecha_entrada} → {r.fecha_salida}
@@ -382,19 +395,18 @@ function Admin() {
                   <li key={r.id} className="px-4 py-4">
                     <div className="flex items-start justify-between gap-3">
                       <p className="font-medium text-slate-900">
-                        {r.huespedes?.nombre ?? '—'}
+                        {r.huespedNombre}
                       </p>
                       <EstadoReserva estado={r.estado} />
                     </div>
                     <p className="mt-1 text-sm text-slate-500">
-                      {r.habitaciones?.nombre ?? '—'} · ${r.total_pagar} USD
+                      {r.habitacionNombre} · ${r.total_pagar} USD
                     </p>
                     <p className="mt-1 text-sm text-slate-500">
                       {r.fecha_entrada} → {r.fecha_salida}
                     </p>
                     <p className="mt-1 text-sm text-slate-500">
-                      Tel: {r.huespedes?.telefono ?? '—'} · Ref:{' '}
-                      {r.referencia || '—'}
+                      Tel: {r.huespedTelefono} · Ref: {r.referencia || '—'}
                     </p>
                   </li>
                 ))}
