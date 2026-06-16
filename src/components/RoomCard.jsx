@@ -49,7 +49,7 @@ function RoomCard({ habitacion }) {
           </p>
           {disponible ? (
             <Link
-              to={`/reservar?habitacion=${id}`}
+              to={`/reservar/${id}`}
               className="ml-auto rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 active:scale-95"
             >
               Reservar

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
 const FORM_VACIO = {
@@ -16,9 +16,8 @@ const FORM_VACIO = {
 const TELEFONO_WHATSAPP = '584129521225'
 
 function Reservar() {
-  // La habitación se identifica por UUID en la URL (?habitacion=UUID).
-  const [searchParams] = useSearchParams()
-  const habitacionId = searchParams.get('habitacion')
+  // La habitación se identifica por UUID en la ruta (/reservar/:id).
+  const { id: habitacionId } = useParams()
 
   const [habitacion, setHabitacion] = useState(null)
   const [cargando, setCargando] = useState(true)
@@ -227,7 +226,13 @@ function Reservar() {
       {/* Contenido */}
       <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
         {cargando ? (
-          <p className="text-sm text-slate-500">Cargando habitación…</p>
+          <div className="flex items-center gap-3 text-sm text-slate-500">
+            <span
+              className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-emerald-600"
+              aria-hidden="true"
+            />
+            Buscando habitación…
+          </div>
         ) : !habitacion ? (
           <div className="rounded-2xl bg-white p-6 shadow-md ring-1 ring-slate-200">
             <p className="text-slate-700">
