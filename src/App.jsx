@@ -4,10 +4,13 @@ import Reservar from './pages/Reservar'
 import Admin from './pages/Admin'
 import Login from './pages/Login'
 import ProtectedRoute from './components/ProtectedRoute'
+import Navbar from './components/Navbar'
 
 function App() {
   return (
-    <Routes>
+    <>
+      <Navbar />
+      <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/reservar" element={<Reservar />} />
       <Route path="/login" element={<Login />} />
@@ -19,7 +22,8 @@ function App() {
           </ProtectedRoute>
         }
       />
-    </Routes>
+      </Routes>
+    </>
   )
 }
 

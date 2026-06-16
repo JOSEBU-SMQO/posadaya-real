@@ -99,7 +99,7 @@ function Home() {
 
         {!cargando && !error && habitaciones.length === 0 && (
           <p className="mt-6 text-sm text-slate-500">
-            Aún no hay habitaciones registradas.
+            No hay habitaciones disponibles
           </p>
         )}
 
