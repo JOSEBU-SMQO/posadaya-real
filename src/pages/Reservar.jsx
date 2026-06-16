@@ -8,7 +8,12 @@ const FORM_VACIO = {
   telefono: '',
   llegada: '',
   salida: '',
+  referencia: '',
 }
+
+// Teléfono de la posada en formato internacional para wa.me
+// (0412-9521225 → +58 412 9521225). wa.me exige el código de país sin "+" ni "0".
+const TELEFONO_WHATSAPP = '584129521225'
 
 function Reservar() {
   // La habitación se identifica por UUID en la URL (?habitacion=UUID).
@@ -22,6 +27,13 @@ function Reservar() {
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState(null)
   const [exito, setExito] = useState(false)
+  // Datos de la reserva confirmada (para el resumen + WhatsApp), ya que
+  // limpiamos el formulario tras guardar.
+  const [confirmacion, setConfirmacion] = useState(null)
+
+  // Disponibilidad según las fechas elegidas:
+  // null = aún no hay fechas | 'verificando' | 'libre' | 'ocupada' | 'error'
+  const [disponibilidad, setDisponibilidad] = useState(null)
 
   useEffect(() => {
     let activo = true
@@ -32,9 +44,11 @@ function Reservar() {
         return
       }
 
+      // Traemos también la tasa_cambio de la posada (relación posada_id)
+      // para poder mostrar el total en bolívares además de en dólares.
       const { data, error } = await supabase
         .from('habitaciones')
-        .select('id, nombre, precio_noche')
+        .select('id, nombre, precio_noche, posadas (tasa_cambio)')
         .eq('id', habitacionId)
         .maybeSingle()
 
@@ -61,6 +75,61 @@ function Reservar() {
   const total =
     habitacion && noches > 0 ? noches * Number(habitacion.precio_noche) : 0
 
+  // Consulta si la habitación está ocupada en un rango de fechas.
+  // Réplica de:
+  //   SELECT * FROM reservas
+  //   WHERE habitacion_id = X
+  //     AND NOT (fecha_entrada >= salida OR fecha_salida <= entrada)
+  // que por las leyes de De Morgan equivale a:
+  //     fecha_entrada < salida  AND  fecha_salida > entrada
+  // Consultamos la vista segura 'reservas_ocupacion' (no expone al huésped).
+  // Devuelve: 'ocupada' | 'libre' | 'error'.
+  async function consultarOcupacion(entrada, salida) {
+    const { data, error } = await supabase
+      .from('reservas_ocupacion')
+      .select('id')
+      .eq('habitacion_id', habitacion.id)
+      .lt('fecha_entrada', salida)
+      .gt('fecha_salida', entrada)
+      .limit(1)
+
+    if (error) return 'error'
+    return data.length > 0 ? 'ocupada' : 'libre'
+  }
+
+  // En cuanto el usuario termina de poner las fechas, comprobamos solapamiento.
+  useEffect(() => {
+    if (!habitacion || noches <= 0) {
+      setDisponibilidad(null)
+      return
+    }
+
+    let activo = true
+    setDisponibilidad('verificando')
+
+    consultarOcupacion(form.llegada, form.salida).then((estado) => {
+      if (activo) setDisponibilidad(estado)
+    })
+
+    return () => {
+      activo = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [habitacion, form.llegada, form.salida, noches])
+
+  // Tasa de cambio (Bs por $) traída de la tabla posadas.
+  const tasaCambio = habitacion?.posadas?.tasa_cambio
+    ? Number(habitacion.posadas.tasa_cambio)
+    : null
+  const totalBs = total > 0 && tasaCambio ? total * tasaCambio : 0
+
+  // Formatea cantidades en bolívares con separadores de miles.
+  const formatoBs = (valor) =>
+    valor.toLocaleString('es-VE', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })
+
   const handleChange = (e) => {
     const { name, value } = e.target
     setForm((prev) => ({ ...prev, [name]: value }))
@@ -80,6 +149,17 @@ function Reservar() {
     }
 
     setEnviando(true)
+
+    // Verificación final UNA ÚLTIMA VEZ justo antes de guardar, por si las
+    // fechas se ocuparon mientras el usuario llenaba el formulario.
+    const estadoFinal = await consultarOcupacion(form.llegada, form.salida)
+    if (estadoFinal === 'ocupada') {
+      setEnviando(false)
+      setDisponibilidad('ocupada')
+      setError('🚨 ¡ALERTA! Estas fechas ya están ocupadas por otro huésped')
+      return
+    }
+
     const { error } = await supabase.rpc('crear_reserva', {
       p_habitacion_id: habitacion.id,
       p_nombre: form.nombre,
@@ -87,6 +167,7 @@ function Reservar() {
       p_telefono: form.telefono,
       p_fecha_entrada: form.llegada,
       p_fecha_salida: form.salida,
+      p_referencia: form.referencia,
     })
     setEnviando(false)
 
@@ -95,8 +176,30 @@ function Reservar() {
       return
     }
 
+    // Guardamos un resumen antes de limpiar el formulario.
+    setConfirmacion({
+      nombre: form.nombre,
+      habitacion: habitacion.nombre,
+      total,
+      totalBs,
+      referencia: form.referencia.trim(),
+    })
     setExito(true)
     setForm(FORM_VACIO)
+  }
+
+  // Construye el enlace de WhatsApp con un mensaje automático.
+  const enlaceWhatsApp = (c) => {
+    const lineas = [
+      `Hola, soy ${c.nombre}.`,
+      `He reservado la habitación: ${c.habitacion}.`,
+      `Total a pagar: $${c.total} USD` +
+        (c.totalBs ? ` (Bs ${formatoBs(c.totalBs)})` : ''),
+      c.referencia ? `Referencia bancaria: ${c.referencia}` : null,
+    ].filter(Boolean)
+    return `https://wa.me/${TELEFONO_WHATSAPP}?text=${encodeURIComponent(
+      lineas.join('\n'),
+    )}`
   }
 
   return (
@@ -137,22 +240,61 @@ function Reservar() {
               Ver habitaciones
             </Link>
           </div>
-        ) : exito ? (
+        ) : exito && confirmacion ? (
           <div className="rounded-2xl bg-white p-6 shadow-md ring-1 ring-emerald-200 sm:p-8">
             <h2 className="text-xl font-bold text-emerald-700">
               ¡Reserva confirmada! 🎉
             </h2>
             <p className="mt-2 text-slate-600">
               Hemos registrado tu reserva para{' '}
-              <span className="font-semibold">{habitacion.nombre}</span>. Te
-              contactaremos para confirmar los detalles.
+              <span className="font-semibold">{confirmacion.habitacion}</span>.
             </p>
-            <Link
-              to="/"
-              className="mt-5 inline-block rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
-            >
-              Volver al inicio
-            </Link>
+
+            {/* Resumen con conversión de moneda */}
+            <div className="mt-4 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-sm font-semibold text-slate-700">
+                  Total a pagar
+                </span>
+                <span className="text-right">
+                  <span className="block text-xl font-bold text-slate-900">
+                    ${confirmacion.total} USD
+                  </span>
+                  {confirmacion.totalBs > 0 && (
+                    <span className="block text-sm text-slate-500">
+                      Bs {formatoBs(confirmacion.totalBs)}
+                    </span>
+                  )}
+                </span>
+              </div>
+              {confirmacion.referencia && (
+                <p className="mt-2 border-t border-slate-200 pt-2 text-sm text-slate-600">
+                  Referencia: {confirmacion.referencia}
+                </p>
+              )}
+            </div>
+
+            <p className="mt-4 text-sm text-slate-600">
+              Envíanos el comprobante por WhatsApp para confirmar tu pago:
+            </p>
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              {/* Botón verde de WhatsApp */}
+              <a
+                href={enlaceWhatsApp(confirmacion)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700 active:scale-[0.98]"
+              >
+                💬 Enviar pago por WhatsApp
+              </a>
+              <Link
+                to="/"
+                className="inline-flex items-center rounded-lg bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-200"
+              >
+                Volver al inicio
+              </Link>
+            </div>
           </div>
         ) : (
           <form
@@ -254,30 +396,118 @@ function Reservar() {
               </div>
             </div>
 
-            {/* Total estimado */}
+            {/* Reporte de pago */}
+            <div className="mt-5">
+              <label
+                htmlFor="referencia"
+                className="block text-sm font-semibold text-slate-700"
+              >
+                Número de referencia bancaria
+              </label>
+              <input
+                id="referencia"
+                name="referencia"
+                type="text"
+                value={form.referencia}
+                onChange={handleChange}
+                placeholder="Ej. 0012345678 (del pago móvil / transferencia)"
+                className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+              />
+            </div>
+
+            {/* Tasa de cambio (traída de la tabla posadas) */}
+            <div className="mt-5">
+              <label
+                htmlFor="tasa"
+                className="block text-sm font-semibold text-slate-700"
+              >
+                Tasa de cambio (Bs por $)
+              </label>
+              <input
+                id="tasa"
+                type="text"
+                readOnly
+                value={tasaCambio !== null ? tasaCambio : '—'}
+                className="mt-1.5 w-full cursor-default rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-700"
+              />
+            </div>
+
+            {/* Desglose del total */}
             {noches > 0 && (
-              <p className="mt-5 text-sm text-slate-600">
-                {noches} {noches === 1 ? 'noche' : 'noches'} ·{' '}
-                <span className="font-semibold text-slate-900">
-                  ${total} USD
-                </span>{' '}
-                en total
+              <div className="mt-5 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
+                <p className="text-sm text-slate-600">
+                  {noches} {noches === 1 ? 'noche' : 'noches'} × $
+                  {habitacion.precio_noche} ={' '}
+                  <span className="font-semibold text-slate-900">${total}</span>
+                </p>
+                <div className="mt-3 flex flex-wrap items-baseline justify-between gap-2 border-t border-slate-200 pt-3">
+                  <span className="text-sm font-semibold text-slate-700">
+                    Total a pagar
+                  </span>
+                  <span className="text-right">
+                    <span className="block text-xl font-bold text-slate-900">
+                      ${total} USD
+                    </span>
+                    {totalBs > 0 && (
+                      <span className="block text-sm text-slate-500">
+                        Bs {formatoBs(totalBs)}
+                      </span>
+                    )}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Reflejo visual de disponibilidad */}
+            {disponibilidad === 'verificando' && (
+              <p className="mt-5 text-sm text-slate-500">
+                Comprobando disponibilidad…
+              </p>
+            )}
+            {disponibilidad === 'libre' && (
+              <p className="mt-5 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 ring-1 ring-emerald-200">
+                ¡Habitación disponible!
+              </p>
+            )}
+            {disponibilidad === 'ocupada' && (
+              <div className="mt-5 rounded-xl bg-red-600 px-5 py-5 text-center text-lg font-extrabold uppercase tracking-wide text-white shadow-lg ring-4 ring-red-200 sm:text-xl">
+                🚨 ¡ALERTA! Estas fechas ya están ocupadas por otro huésped
+              </div>
+            )}
+            {disponibilidad === 'error' && (
+              <p className="mt-5 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">
+                No pudimos comprobar la disponibilidad. Por seguridad, el botón
+                queda bloqueado. (¿Está aplicada la migración de la vista
+                <code className="mx-1">reservas_ocupacion</code> en Supabase?)
               </p>
             )}
 
-            {error && (
+            {error && disponibilidad !== 'ocupada' && (
               <p className="mt-5 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200">
                 {error}
               </p>
             )}
 
-            <button
-              type="submit"
-              disabled={enviando}
-              className="mt-7 w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-            >
-              {enviando ? 'Confirmando…' : 'Confirmar reserva'}
-            </button>
+            {(() => {
+              const bloqueado =
+                enviando ||
+                disponibilidad === 'ocupada' ||
+                disponibilidad === 'verificando' ||
+                disponibilidad === 'error'
+              return (
+                <button
+                  type="submit"
+                  disabled={bloqueado}
+                  className={`mt-7 w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition active:scale-[0.98] sm:w-auto ${
+                    bloqueado
+                      ? 'cursor-not-allowed bg-slate-300 text-slate-500'
+                      : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                  }`}
+                >
+                  {enviando ? 'Confirmando…' : 'Confirmar reserva'}
+                </button>
+              )
+            })()}
           </form>
         )}
       </main>

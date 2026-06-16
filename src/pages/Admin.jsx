@@ -12,6 +12,7 @@ const FORM_VACIO = {
 
 function Admin() {
   const [habitaciones, setHabitaciones] = useState([])
+  const [reservas, setReservas] = useState([])
   const [posadaId, setPosadaId] = useState(null)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState(null)
@@ -25,18 +26,28 @@ function Admin() {
     setCargando(true)
     setError(null)
 
-    const [habs, posadas] = await Promise.all([
+    const [habs, posadas, resv] = await Promise.all([
       supabase
         .from('habitaciones')
         .select('id, nombre, descripcion, precio_noche, capacidad, imagen_url')
         .order('created_at', { ascending: true }),
       supabase.from('posadas').select('id').limit(1),
+      supabase
+        .from('reservas')
+        .select(
+          'id, fecha_entrada, fecha_salida, estado, total_pagar, referencia, habitaciones (nombre), huespedes (nombre, telefono)',
+        )
+        .order('created_at', { ascending: false }),
     ])
 
     if (habs.error) {
       setError(habs.error.message)
     } else {
       setHabitaciones(habs.data)
+    }
+
+    if (!resv.error) {
+      setReservas(resv.data)
     }
 
     if (!posadas.error && posadas.data.length > 0) {
@@ -309,8 +320,105 @@ function Admin() {
             </>
           )}
         </div>
+
+        {/* Reservas recibidas */}
+        <h2 className="mt-10 text-lg font-bold text-slate-900">
+          Reservas recibidas
+        </h2>
+        <div className="mt-4 overflow-hidden rounded-2xl bg-white shadow-md ring-1 ring-slate-200">
+          {cargando ? (
+            <p className="px-5 py-6 text-sm text-slate-500">Cargando…</p>
+          ) : reservas.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-slate-500">
+              Todavía no hay reservas.
+            </p>
+          ) : (
+            <>
+              {/* Tabla (escritorio) */}
+              <table className="hidden w-full text-left text-sm sm:table">
+                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-5 py-3 font-semibold">Huésped</th>
+                    <th className="px-5 py-3 font-semibold">Teléfono</th>
+                    <th className="px-5 py-3 font-semibold">Habitación</th>
+                    <th className="px-5 py-3 font-semibold">Fechas</th>
+                    <th className="px-5 py-3 font-semibold">Total</th>
+                    <th className="px-5 py-3 font-semibold">Referencia</th>
+                    <th className="px-5 py-3 font-semibold">Estado</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {reservas.map((r) => (
+                    <tr key={r.id}>
+                      <td className="px-5 py-4 font-medium text-slate-900">
+                        {r.huespedes?.nombre ?? '—'}
+                      </td>
+                      <td className="px-5 py-4 text-slate-600">
+                        {r.huespedes?.telefono ?? '—'}
+                      </td>
+                      <td className="px-5 py-4 text-slate-600">
+                        {r.habitaciones?.nombre ?? '—'}
+                      </td>
+                      <td className="px-5 py-4 text-slate-600">
+                        {r.fecha_entrada} → {r.fecha_salida}
+                      </td>
+                      <td className="px-5 py-4 text-slate-600">
+                        ${r.total_pagar} USD
+                      </td>
+                      <td className="px-5 py-4 text-slate-600">
+                        {r.referencia || '—'}
+                      </td>
+                      <td className="px-5 py-4">
+                        <EstadoReserva estado={r.estado} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Lista (móvil) */}
+              <ul className="divide-y divide-slate-100 sm:hidden">
+                {reservas.map((r) => (
+                  <li key={r.id} className="px-4 py-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="font-medium text-slate-900">
+                        {r.huespedes?.nombre ?? '—'}
+                      </p>
+                      <EstadoReserva estado={r.estado} />
+                    </div>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {r.habitaciones?.nombre ?? '—'} · ${r.total_pagar} USD
+                    </p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {r.fecha_entrada} → {r.fecha_salida}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Tel: {r.huespedes?.telefono ?? '—'} · Ref:{' '}
+                      {r.referencia || '—'}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
       </main>
     </div>
+  )
+}
+
+function EstadoReserva({ estado }) {
+  const confirmada = estado === 'confirmada'
+  return (
+    <span
+      className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${
+        confirmada
+          ? 'bg-emerald-100 text-emerald-700'
+          : 'bg-amber-100 text-amber-700'
+      }`}
+    >
+      {estado}
+    </span>
   )
 }
 
