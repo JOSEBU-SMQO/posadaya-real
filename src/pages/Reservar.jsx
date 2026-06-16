@@ -20,6 +20,7 @@ function Reservar() {
   const { id: habitacionId } = useParams()
 
   const [habitacion, setHabitacion] = useState(null)
+  const [tasaCambio, setTasaCambio] = useState(null)
   const [cargando, setCargando] = useState(true)
 
   const [form, setForm] = useState(FORM_VACIO)
@@ -43,16 +44,31 @@ function Reservar() {
         return
       }
 
-      // Traemos también la tasa_cambio de la posada (relación posada_id)
-      // para poder mostrar el total en bolívares además de en dólares.
+      // 1) Buscamos la habitación.
       const { data, error } = await supabase
         .from('habitaciones')
-        .select('id, nombre, precio_noche, posadas (tasa_cambio)')
+        .select('id, nombre, precio_noche, posada_id')
         .eq('id', habitacionId)
         .maybeSingle()
 
       if (!activo) return
-      if (!error) setHabitacion(data)
+      if (error || !data) {
+        setCargando(false)
+        return
+      }
+      setHabitacion(data)
+
+      // 2) Traemos la tasa_cambio de su posada en una consulta aparte
+      //    (así no dependemos de la relación de clave foránea en PostgREST).
+      if (data.posada_id) {
+        const { data: posada } = await supabase
+          .from('posadas')
+          .select('tasa_cambio')
+          .eq('id', data.posada_id)
+          .maybeSingle()
+        if (activo && posada) setTasaCambio(Number(posada.tasa_cambio))
+      }
+
       setCargando(false)
     }
 
@@ -116,10 +132,7 @@ function Reservar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [habitacion, form.llegada, form.salida, noches])
 
-  // Tasa de cambio (Bs por $) traída de la tabla posadas.
-  const tasaCambio = habitacion?.posadas?.tasa_cambio
-    ? Number(habitacion.posadas.tasa_cambio)
-    : null
+  // Total en bolívares usando la tasa_cambio cargada de la posada.
   const totalBs = total > 0 && tasaCambio ? total * tasaCambio : 0
 
   // Formatea cantidades en bolívares con separadores de miles.
