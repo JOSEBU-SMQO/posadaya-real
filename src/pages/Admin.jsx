@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
 const FORM_VACIO = {
@@ -11,8 +11,6 @@ const FORM_VACIO = {
 }
 
 function Admin() {
-  const navigate = useNavigate()
-
   const [habitaciones, setHabitaciones] = useState([])
   const [posadaId, setPosadaId] = useState(null)
   const [cargando, setCargando] = useState(true)
@@ -21,6 +19,7 @@ function Admin() {
   const [form, setForm] = useState(FORM_VACIO)
   const [guardando, setGuardando] = useState(false)
   const [formError, setFormError] = useState(null)
+  const [eliminandoId, setEliminandoId] = useState(null)
 
   async function cargar() {
     setCargando(true)
@@ -85,9 +84,28 @@ function Admin() {
     cargar()
   }
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-    navigate('/login', { replace: true })
+  const handleEliminar = async (habitacion) => {
+    // Confirmación para evitar borrados accidentales.
+    const ok = window.confirm(
+      `¿Eliminar la habitación "${habitacion.nombre}"? Esta acción no se puede deshacer.`,
+    )
+    if (!ok) return
+
+    setError(null)
+    setEliminandoId(habitacion.id)
+    const { error } = await supabase
+      .from('habitaciones')
+      .delete()
+      .eq('id', habitacion.id)
+    setEliminandoId(null)
+
+    if (error) {
+      setError(error.message)
+      return
+    }
+
+    // Quitamos la fila del estado sin recargar todo.
+    setHabitaciones((prev) => prev.filter((h) => h.id !== habitacion.id))
   }
 
   const total = habitaciones.length
@@ -101,21 +119,12 @@ function Admin() {
       {/* Cabecera */}
       <header className="bg-gradient-to-br from-slate-900 to-emerald-900 text-white">
         <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
-          <div className="flex items-start justify-between gap-4">
-            <Link
-              to="/"
-              className="text-sm font-semibold text-emerald-400 hover:text-emerald-300"
-            >
-              ← Volver al inicio
-            </Link>
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="rounded-lg bg-white/10 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-white/20"
-            >
-              Cerrar sesión
-            </button>
-          </div>
+          <Link
+            to="/"
+            className="text-sm font-semibold text-emerald-400 hover:text-emerald-300"
+          >
+            ← Volver al inicio
+          </Link>
           <h1 className="mt-3 text-2xl font-bold sm:text-3xl">
             Panel de administración
           </h1>
@@ -238,6 +247,9 @@ function Admin() {
                     <th className="px-5 py-3 font-semibold">Habitación</th>
                     <th className="px-5 py-3 font-semibold">Capacidad</th>
                     <th className="px-5 py-3 font-semibold">Precio / noche</th>
+                    <th className="px-5 py-3 font-semibold text-right">
+                      Acciones
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -253,6 +265,16 @@ function Admin() {
                       <td className="px-5 py-4 text-slate-600">
                         ${h.precio_noche} USD
                       </td>
+                      <td className="px-5 py-4 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleEliminar(h)}
+                          disabled={eliminandoId === h.id}
+                          className="rounded-lg px-3 py-1.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {eliminandoId === h.id ? 'Eliminando…' : 'Eliminar'}
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -261,12 +283,26 @@ function Admin() {
               {/* Lista (móvil) */}
               <ul className="divide-y divide-slate-100 sm:hidden">
                 {habitaciones.map((h) => (
-                  <li key={h.id} className="px-4 py-4">
-                    <p className="font-medium text-slate-900">{h.nombre}</p>
-                    <p className="mt-1 text-sm text-slate-500">
-                      {h.capacidad} {h.capacidad === 1 ? 'huésped' : 'huéspedes'} ·
-                      ${h.precio_noche} USD / noche
-                    </p>
+                  <li
+                    key={h.id}
+                    className="flex items-start justify-between gap-3 px-4 py-4"
+                  >
+                    <div>
+                      <p className="font-medium text-slate-900">{h.nombre}</p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        {h.capacidad}{' '}
+                        {h.capacidad === 1 ? 'huésped' : 'huéspedes'} · $
+                        {h.precio_noche} USD / noche
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleEliminar(h)}
+                      disabled={eliminandoId === h.id}
+                      className="shrink-0 rounded-lg px-3 py-1.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {eliminandoId === h.id ? 'Eliminando…' : 'Eliminar'}
+                    </button>
                   </li>
                 ))}
               </ul>
