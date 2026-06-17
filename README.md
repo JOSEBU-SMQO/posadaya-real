@@ -1,51 +1,66 @@
-# 🏰 PosadaYa - Motor de Reservas Real
+# 🏰 PosadaYa - Motor de Reservas Inteligente
 
 ### 🔗 App en vivo
 
 **👉 https://posadaya.vercel.app**
 
-> Reemplaza el enlace de arriba por la URL real de tu despliegue en Vercel.
+> Reemplaza el enlace por la URL real de tu despliegue en Vercel.
 
-## ¿Qué es?
+---
 
-Una app diseñada para que las **posadas venezolanas** gestionen sus reservas,
-reciban **pagos móviles** y confirmen vía **WhatsApp**.
+## 🎯 ¿Qué problema resuelve?
+
+Ayuda a las **posadas en Venezuela** a **digitalizar su catálogo** de
+habitaciones y **recibir pagos móviles** sin complicaciones. Olvídate de
+anotar reservas en un cuaderno: los huéspedes reservan y reportan su pago en
+línea, y tú confirmas con un clic.
 
 ## ✨ Funciones clave
 
-- 🖼️ **Galería dinámica** — las habitaciones se cargan en tiempo real desde
-  **Supabase**.
-- 💳 **Pago móvil integrado** — el huésped paga y reporta su número de
-  referencia desde la misma pantalla.
-- 💱 **Cálculo de Bs/$ en tiempo real** — el sistema guarda la **tasa del dólar
-  en Supabase** (tabla `posadas`). El dueño la actualiza desde su panel y, al
-  instante, todos los precios en bolívares de la web se recalculan con esa tasa.
-  El huésped nunca la edita; solo la ve.
-- 🔐 **Panel Admin privado** — gestión de habitaciones, validación de pagos y
-  tasa de cambio, protegido con login.
+- 🖼️ **Galería dinámica** — las habitaciones se cargan en vivo desde Supabase.
+- 📅 **Reservas con disponibilidad** — bloquea fechas pasadas y ocupadas.
+- 💱 **Multi-moneda en tiempo real** — precios en **$ y Bs** según la tasa del
+  dólar guardada en Supabase.
+- 💳 **Pago móvil + referencia** — el huésped reporta su número de referencia.
+- 💬 **Aviso por WhatsApp** — mensaje automático al posadero.
+- 🔐 **Panel Admin privado** — protegido con login.
 
-## ⚙️ Tecnología
+## ⚙️ Stack Tecnológico
 
-| Herramienta | Uso |
-|-------------|-----|
-| **React** | Interfaz de usuario (con Vite) |
-| **Supabase** | Base de datos (PostgreSQL) y autenticación (Auth) |
-| **Tailwind CSS** | Estilos y diseño responsive |
-| **Vercel** | Hosting y despliegue |
+| Tecnología | Rol |
+|:----------:|-----|
+| ⚛️ **React** | Interfaz de usuario (con Vite) |
+| 🎨 **Tailwind CSS** | Estilos y diseño responsive |
+| 🟢 **Supabase** | Base de datos (DB) y autenticación (Auth) |
+| ▲ **Vercel** | Hosting y despliegue |
 
-## 📱 ¿Cómo funciona?
+## 📱 ¿Cómo funciona? (huésped)
 
 ```
-Reserva  →  Paga (Pago Móvil)  →  Avisa por WhatsApp  →  El dueño valida el pago
+🛏️ Reserva  →  💳 Paga (Pago Móvil)  →  💬 Avisa por WhatsApp  →  ✅ El dueño valida
 ```
 
-1. **Reserva** 🛏️ — el huésped elige habitación y fechas; la app verifica
-   disponibilidad y calcula el total en $ y Bs.
-2. **Paga** 💳 — realiza el pago móvil y escribe su número de referencia.
-3. **Avisa** 💬 — pulsa *Avisar por WhatsApp* y le llega el mensaje al posadero.
-4. **Confirma** ✅ — el dueño valida el pago desde su panel privado.
+## 👤 Instrucciones para el Administrador
 
-## 🛠️ Puesta en marcha
+1. **🔐 Login**
+   Pulsa **Admin** en la barra superior e inicia sesión con tu correo y
+   contraseña (creados en Supabase → Authentication). Solo tú puedes entrar.
+
+2. **💱 Ajuste de tasa**
+   Arriba del panel, en la tarjeta de tasa de cambio, escribe la tasa oficial
+   del día (ej. `55` → `62`) y pulsa **Actualizar Tasa**. Los precios en
+   bolívares de toda la web se recalculan al instante.
+
+3. **✅ Verificación de reservas**
+   En **Gestión de Pagos Recibidos** revisa cada reserva con el nombre,
+   teléfono y **número de referencia** del huésped. Cuando confirmes que el
+   pago llegó, pulsa **Validar Pago ✅**: la reserva pasa a **verde (Pagada)**.
+   Las pendientes se ven en **ámbar (⏳ Pendiente)**.
+
+   > También puedes **añadir ✏️ / editar / eliminar 🗑️** habitaciones desde el
+   > mismo panel.
+
+## 🛠️ Puesta en marcha (desarrollador)
 
 1. Crea `.env.local` (y configúralo también en Vercel):
    ```
