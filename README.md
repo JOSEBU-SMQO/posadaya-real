@@ -1,5 +1,11 @@
 # 🏰 PosadaYa - Motor de Reservas Real
 
+### 🔗 App en vivo
+
+**👉 https://posadaya.vercel.app**
+
+> Reemplaza el enlace de arriba por la URL real de tu despliegue en Vercel.
+
 ## ¿Qué es?
 
 Una app diseñada para que las **posadas venezolanas** gestionen sus reservas,
@@ -11,8 +17,10 @@ reciban **pagos móviles** y confirmen vía **WhatsApp**.
   **Supabase**.
 - 💳 **Pago móvil integrado** — el huésped paga y reporta su número de
   referencia desde la misma pantalla.
-- 💱 **Cálculo de Bs/$ según tasa diaria** — muestra el total en dólares y
-  bolívares usando la tasa que el dueño actualiza cada día.
+- 💱 **Cálculo de Bs/$ en tiempo real** — el sistema guarda la **tasa del dólar
+  en Supabase** (tabla `posadas`). El dueño la actualiza desde su panel y, al
+  instante, todos los precios en bolívares de la web se recalculan con esa tasa.
+  El huésped nunca la edita; solo la ve.
 - 🔐 **Panel Admin privado** — gestión de habitaciones, validación de pagos y
   tasa de cambio, protegido con login.
 

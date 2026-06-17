@@ -6,13 +6,13 @@ function Exito() {
     <div className="grid min-h-[80vh] place-items-center bg-slate-50 px-4">
       <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-md ring-1 ring-emerald-200">
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-4xl">
-          🏨
+          ✨
         </div>
         <h1 className="mt-5 text-2xl font-bold text-slate-900">
-          ¡Listo! Tu reporte ha sido recibido
+          ¡Gracias por elegirnos!
         </h1>
         <p className="mt-3 text-slate-600">
-          El posadero se pondrá en contacto pronto.
+          Tu reserva está en proceso de validación.
         </p>
 
         <Link

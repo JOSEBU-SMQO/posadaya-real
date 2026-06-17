@@ -700,7 +700,7 @@ function EstadoReserva({ estado }) {
           : 'bg-amber-100 text-amber-700'
       }`}
     >
-      {estado}
+      {confirmada ? '✅ Pagada' : '⏳ Pendiente'}
     </span>
   )
 }
