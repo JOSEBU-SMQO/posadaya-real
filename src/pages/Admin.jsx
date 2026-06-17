@@ -21,6 +21,10 @@ function Admin() {
   const [guardando, setGuardando] = useState(false)
   const [formError, setFormError] = useState(null)
   const [eliminandoId, setEliminandoId] = useState(null)
+  // id de la habitación en edición (null = estamos añadiendo una nueva).
+  const [editandoId, setEditandoId] = useState(null)
+  // id de la reserva cuyo pago se está confirmando.
+  const [confirmandoId, setConfirmandoId] = useState(null)
 
   async function cargar() {
     setCargando(true)
@@ -88,15 +92,23 @@ function Admin() {
       return
     }
 
-    setGuardando(true)
-    const { error } = await supabase.from('habitaciones').insert({
-      posada_id: posadaId,
+    const datos = {
       nombre: form.nombre.trim(),
       descripcion: form.descripcion.trim() || null,
       precio_noche: Number(form.precio_noche),
       capacidad: Number(form.capacidad),
       imagen_url: form.imagen_url.trim() || null,
-    })
+    }
+
+    setGuardando(true)
+    const { error } = editandoId
+      ? await supabase
+          .from('habitaciones')
+          .update(datos)
+          .eq('id', editandoId)
+      : await supabase
+          .from('habitaciones')
+          .insert({ ...datos, posada_id: posadaId })
     setGuardando(false)
 
     if (error) {
@@ -105,7 +117,50 @@ function Admin() {
     }
 
     setForm(FORM_VACIO)
+    setEditandoId(null)
     cargar()
+  }
+
+  const handleEditar = (habitacion) => {
+    setFormError(null)
+    setEditandoId(habitacion.id)
+    setForm({
+      nombre: habitacion.nombre ?? '',
+      descripcion: habitacion.descripcion ?? '',
+      precio_noche: String(habitacion.precio_noche ?? ''),
+      capacidad: String(habitacion.capacidad ?? '1'),
+      imagen_url: habitacion.imagen_url ?? '',
+    })
+    // Subimos para que el dueño vea el formulario relleno.
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const handleCancelarEdicion = () => {
+    setEditandoId(null)
+    setForm(FORM_VACIO)
+    setFormError(null)
+  }
+
+  const handleConfirmarPago = async (reserva) => {
+    setError(null)
+    setConfirmandoId(reserva.id)
+    const { error } = await supabase
+      .from('reservas')
+      .update({ estado: 'confirmada' })
+      .eq('id', reserva.id)
+    setConfirmandoId(null)
+
+    if (error) {
+      setError(error.message)
+      return
+    }
+
+    // Reflejamos el cambio sin recargar todo.
+    setReservas((prev) =>
+      prev.map((r) =>
+        r.id === reserva.id ? { ...r, estado: 'confirmada' } : r,
+      ),
+    )
   }
 
   const handleEliminar = async (habitacion) => {
@@ -174,10 +229,10 @@ function Admin() {
           />
         </div>
 
-        {/* Formulario: añadir habitación */}
+        {/* Formulario: añadir / editar habitación */}
         <section className="mt-8 rounded-2xl bg-white p-5 shadow-md ring-1 ring-slate-200 sm:p-6">
           <h2 className="text-lg font-bold text-slate-900">
-            Añadir habitación
+            {editandoId ? 'Editar habitación' : 'Añadir habitación'}
           </h2>
 
           <form onSubmit={handleSubmit} className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -238,14 +293,28 @@ function Admin() {
               </p>
             )}
 
-            <div className="sm:col-span-2">
+            <div className="flex flex-wrap gap-3 sm:col-span-2">
               <button
                 type="submit"
                 disabled={guardando}
                 className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {guardando ? 'Guardando…' : 'Añadir habitación'}
+                {guardando
+                  ? 'Guardando…'
+                  : editandoId
+                    ? 'Guardar cambios'
+                    : 'Añadir habitación'}
               </button>
+              {editandoId && (
+                <button
+                  type="button"
+                  onClick={handleCancelarEdicion}
+                  disabled={guardando}
+                  className="rounded-lg bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-200 disabled:opacity-60"
+                >
+                  Cancelar
+                </button>
+              )}
             </div>
           </form>
         </section>
@@ -289,15 +358,24 @@ function Admin() {
                       <td className="px-5 py-4 text-slate-600">
                         ${h.precio_noche} USD
                       </td>
-                      <td className="px-5 py-4 text-right">
-                        <button
-                          type="button"
-                          onClick={() => handleEliminar(h)}
-                          disabled={eliminandoId === h.id}
-                          className="rounded-lg px-3 py-1.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {eliminandoId === h.id ? 'Eliminando…' : 'Eliminar'}
-                        </button>
+                      <td className="px-5 py-4">
+                        <div className="flex justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleEditar(h)}
+                            className="rounded-lg px-3 py-1.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleEliminar(h)}
+                            disabled={eliminandoId === h.id}
+                            className="rounded-lg px-3 py-1.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {eliminandoId === h.id ? 'Borrando…' : 'Eliminar'}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -311,7 +389,7 @@ function Admin() {
                     key={h.id}
                     className="flex items-start justify-between gap-3 px-4 py-4"
                   >
-                    <div>
+                    <div className="min-w-0">
                       <p className="font-medium text-slate-900">{h.nombre}</p>
                       <p className="mt-1 text-sm text-slate-500">
                         {h.capacidad}{' '}
@@ -319,14 +397,23 @@ function Admin() {
                         {h.precio_noche} USD / noche
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleEliminar(h)}
-                      disabled={eliminandoId === h.id}
-                      className="shrink-0 rounded-lg px-3 py-1.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {eliminandoId === h.id ? 'Eliminando…' : 'Eliminar'}
-                    </button>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleEditar(h)}
+                        className="rounded-lg px-3 py-1.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleEliminar(h)}
+                        disabled={eliminandoId === h.id}
+                        className="rounded-lg px-3 py-1.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {eliminandoId === h.id ? 'Borrando…' : 'Eliminar'}
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -347,8 +434,9 @@ function Admin() {
             </p>
           ) : (
             <>
-              {/* Tabla (escritorio) */}
-              <table className="hidden w-full text-left text-sm sm:table">
+              {/* Tabla (escritorio) — con scroll horizontal por si no cabe */}
+              <div className="hidden overflow-x-auto sm:block">
+              <table className="w-full min-w-[760px] text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                   <tr>
                     <th className="px-5 py-3 font-semibold">Huésped</th>
@@ -358,6 +446,7 @@ function Admin() {
                     <th className="px-5 py-3 font-semibold">Total</th>
                     <th className="px-5 py-3 font-semibold">Referencia</th>
                     <th className="px-5 py-3 font-semibold">Estado</th>
+                    <th className="px-5 py-3 font-semibold text-right">Acción</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -384,10 +473,27 @@ function Admin() {
                       <td className="px-5 py-4">
                         <EstadoReserva estado={r.estado} />
                       </td>
+                      <td className="px-5 py-4 text-right">
+                        {r.estado === 'pendiente' ? (
+                          <button
+                            type="button"
+                            onClick={() => handleConfirmarPago(r)}
+                            disabled={confirmandoId === r.id}
+                            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {confirmandoId === r.id
+                              ? 'Confirmando…'
+                              : 'Confirmar Pago'}
+                          </button>
+                        ) : (
+                          <span className="text-sm text-slate-400">—</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              </div>
 
               {/* Lista (móvil) */}
               <ul className="divide-y divide-slate-100 sm:hidden">
@@ -408,6 +514,18 @@ function Admin() {
                     <p className="mt-1 text-sm text-slate-500">
                       Tel: {r.huespedTelefono} · Ref: {r.referencia || '—'}
                     </p>
+                    {r.estado === 'pendiente' && (
+                      <button
+                        type="button"
+                        onClick={() => handleConfirmarPago(r)}
+                        disabled={confirmandoId === r.id}
+                        className="mt-3 w-full rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {confirmandoId === r.id
+                          ? 'Confirmando…'
+                          : 'Confirmar Pago'}
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
