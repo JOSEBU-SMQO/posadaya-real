@@ -199,6 +199,9 @@ function Reservar() {
     })
     setExito(true)
     setForm(FORM_VACIO)
+
+    // Confirmación visual simple para el huésped.
+    window.alert('Reserva realizada con éxito')
   }
 
   // Mensaje automático de WhatsApp con el formato pedido.
@@ -409,24 +412,8 @@ function Reservar() {
               </div>
             </div>
 
-            {/* Tasa de cambio (traída de la tabla posadas) */}
-            <div className="mt-5">
-              <label
-                htmlFor="tasa"
-                className="block text-sm font-semibold text-slate-700"
-              >
-                Tasa de cambio (Bs por $)
-              </label>
-              <input
-                id="tasa"
-                type="text"
-                readOnly
-                value={tasaCambio !== null ? tasaCambio : '—'}
-                className="mt-1.5 w-full cursor-default rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-700"
-              />
-            </div>
-
-            {/* Total en USD y Bs */}
+            {/* Total automático en USD y Bs (la tasa se toma de 'posadas';
+                el huésped no la escribe). */}
             {noches > 0 && (
               <div className="mt-5 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
                 <p className="text-sm text-slate-600">
@@ -434,24 +421,20 @@ function Reservar() {
                   {habitacion.precio_noche} ={' '}
                   <span className="font-semibold text-slate-900">${total}</span>
                 </p>
-                <div className="mt-3 grid grid-cols-2 gap-3 border-t border-slate-200 pt-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">
-                      Total en USD
-                    </p>
-                    <p className="text-xl font-bold text-slate-900">
-                      ${total}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">
-                      Total en Bs
-                    </p>
-                    <p className="text-xl font-bold text-emerald-700">
-                      {totalBs > 0 ? `Bs ${formatoBs(totalBs)}` : '—'}
-                    </p>
-                  </div>
-                </div>
+                <p className="mt-3 border-t border-slate-200 pt-3 text-lg font-bold text-slate-900">
+                  Total: ${total}
+                  {totalBs > 0 && (
+                    <span className="text-emerald-700">
+                      {' '}
+                      (Bs {formatoBs(totalBs)})
+                    </span>
+                  )}
+                </p>
+                {tasaCambio !== null && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Tasa de cambio actual: Bs {tasaCambio} por $1
+                  </p>
+                )}
               </div>
             )}
 
