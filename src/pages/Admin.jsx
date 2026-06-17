@@ -27,6 +27,7 @@ function Admin() {
 
   const [form, setForm] = useState(FORM_VACIO)
   const [guardando, setGuardando] = useState(false)
+  const [guardadoOk, setGuardadoOk] = useState(null)
   const [formError, setFormError] = useState(null)
   const [eliminandoId, setEliminandoId] = useState(null)
   // id de la habitación en edición (null = estamos añadiendo una nueva).
@@ -90,11 +91,13 @@ function Admin() {
   const handleChange = (e) => {
     const { name, value } = e.target
     setForm((prev) => ({ ...prev, [name]: value }))
+    setGuardadoOk(null)
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setFormError(null)
+    setGuardadoOk(null)
 
     if (!posadaId) {
       setFormError('No hay ninguna posada registrada a la que asociar la habitación.')
@@ -125,6 +128,9 @@ function Admin() {
       return
     }
 
+    setGuardadoOk(
+      editandoId ? '✓ Habitación actualizada.' : '✓ Habitación añadida.',
+    )
     setForm(FORM_VACIO)
     setEditandoId(null)
     cargar()
@@ -409,6 +415,11 @@ function Admin() {
                 {formError}
               </p>
             )}
+            {guardadoOk && (
+              <p className="sm:col-span-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 ring-1 ring-emerald-200">
+                {guardadoOk}
+              </p>
+            )}
 
             <div className="flex flex-wrap gap-3 sm:col-span-2">
               <button
@@ -439,7 +450,7 @@ function Admin() {
         {/* Tabla de habitaciones */}
         <div className="mt-8 overflow-hidden rounded-2xl bg-white shadow-md ring-1 ring-slate-200">
           {cargando ? (
-            <p className="px-5 py-6 text-sm text-slate-500">Cargando…</p>
+            <Cargando />
           ) : error ? (
             <p className="px-5 py-6 text-sm text-red-700">
               No se pudieron cargar las habitaciones: {error}
@@ -551,7 +562,7 @@ function Admin() {
         </p>
         <div className="mt-4 overflow-hidden rounded-2xl bg-white shadow-md ring-1 ring-slate-200">
           {cargando ? (
-            <p className="px-5 py-6 text-sm text-slate-500">Cargando…</p>
+            <Cargando />
           ) : reservas.length === 0 ? (
             <p className="px-5 py-6 text-sm text-slate-500">
               Todavía no hay reservas.
@@ -663,6 +674,18 @@ function Admin() {
           )}
         </div>
       </main>
+    </div>
+  )
+}
+
+function Cargando() {
+  return (
+    <div className="flex items-center gap-3 px-5 py-6 text-sm text-slate-500">
+      <span
+        className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-emerald-600"
+        aria-hidden="true"
+      />
+      Cargando…
     </div>
   )
 }
