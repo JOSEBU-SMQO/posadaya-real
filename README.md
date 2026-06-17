@@ -1,49 +1,45 @@
-# 🏰 PosadaYa - Sistema de Reservas Full Stack
+# 🏰 PosadaYa - Motor de Reservas Real
 
-Motor de reservas para posadas, con pago móvil y precios en dólares y bolívares.
+## ¿Qué es?
 
-## 📝 ¿Qué es?
+Una app diseñada para que las **posadas venezolanas** gestionen sus reservas,
+reciban **pagos móviles** y confirmen vía **WhatsApp**.
 
-- 📱 **App móvil-first** — diseñada para usarse cómodamente desde el teléfono,
-  tanto para el huésped que reserva como para el dueño que administra.
-- 💱 **Gestión multi-moneda** — muestra los precios en **USD** y su equivalente
-  en **Bolívares**, con una tasa de cambio que el dueño actualiza en tiempo real.
-- 💬 **Reporte de pagos vía WhatsApp** — el huésped paga por pago móvil, reporta
-  su número de referencia y avisa al posadero por WhatsApp con un solo botón.
+## ✨ Funciones clave
 
-## ⚙️ Stack tecnológico
+- 🖼️ **Galería dinámica** — las habitaciones se cargan en tiempo real desde
+  **Supabase**.
+- 💳 **Pago móvil integrado** — el huésped paga y reporta su número de
+  referencia desde la misma pantalla.
+- 💱 **Cálculo de Bs/$ según tasa diaria** — muestra el total en dólares y
+  bolívares usando la tasa que el dueño actualiza cada día.
+- 🔐 **Panel Admin privado** — gestión de habitaciones, validación de pagos y
+  tasa de cambio, protegido con login.
 
-| Tecnología | Uso |
-|-----------|-----|
+## ⚙️ Tecnología
+
+| Herramienta | Uso |
+|-------------|-----|
 | **React** | Interfaz de usuario (con Vite) |
-| **Tailwind CSS** | Estilos y diseño responsive |
 | **Supabase** | Base de datos (PostgreSQL) y autenticación (Auth) |
+| **Tailwind CSS** | Estilos y diseño responsive |
 | **Vercel** | Hosting y despliegue |
 
 ## 📱 ¿Cómo funciona?
 
-Tres pasos para el huésped:
+```
+Reserva  →  Paga (Pago Móvil)  →  Avisa por WhatsApp  →  El dueño valida el pago
+```
 
-1. **Reserva** 🛏️ — elige una habitación y sus fechas. La app comprueba que
-   estén libres y calcula el total en **$ y Bs**.
-2. **Paga** 💳 — realiza el **pago móvil** con los datos que muestra la app y
-   escribe su **número de referencia**.
-3. **Avisa** 💬 — pulsa **Avisar por WhatsApp**: se envía un mensaje automático
-   al posadero con la habitación, el total y la referencia.
+1. **Reserva** 🛏️ — el huésped elige habitación y fechas; la app verifica
+   disponibilidad y calcula el total en $ y Bs.
+2. **Paga** 💳 — realiza el pago móvil y escribe su número de referencia.
+3. **Avisa** 💬 — pulsa *Avisar por WhatsApp* y le llega el mensaje al posadero.
+4. **Confirma** ✅ — el dueño valida el pago desde su panel privado.
 
-El dueño entra a su **panel privado** (`/admin`), ve la reserva con el número de
-referencia y pulsa **Validar Pago ✅** para confirmarla.
+## 🛠️ Puesta en marcha
 
-## 👤 Para el Dueño
-
-- **Actualizar la tasa de cambio** (arriba del panel): cambia el valor oficial
-  (ej. 55 → 62) y los precios en Bs de toda la web se recalculan.
-- **Gestionar habitaciones**: añadir, **editar ✏️** o **eliminar 🗑️**.
-- **Validar pagos**: revisa el número de referencia y confirma la reserva.
-
-## 🛠️ Puesta en marcha (desarrollador)
-
-1. Crea `.env.local` (y configura lo mismo en Vercel):
+1. Crea `.env.local` (y configúralo también en Vercel):
    ```
    VITE_SUPABASE_URL=https://TU-PROYECTO.supabase.co
    VITE_SUPABASE_ANON_KEY=tu-anon-key
@@ -67,6 +63,5 @@ src/
   lib/         supabase.js
 supabase/
   ESQUEMA_COMPLETO.sql   Script único (tablas + políticas + función)
-  migrations/            Historial de migraciones 0001..0009
 vercel.json              Rewrites SPA (evita 404 al refrescar)
 ```
