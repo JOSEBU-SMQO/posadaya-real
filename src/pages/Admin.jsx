@@ -18,6 +18,13 @@ function Admin() {
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState(null)
 
+  // Tasa de cambio de la posada (el "superpoder" del dueño).
+  const [tasaActual, setTasaActual] = useState(null)
+  const [nuevaTasa, setNuevaTasa] = useState('')
+  const [actualizandoTasa, setActualizandoTasa] = useState(false)
+  const [tasaError, setTasaError] = useState(null)
+  const [tasaOk, setTasaOk] = useState(false)
+
   const [form, setForm] = useState(FORM_VACIO)
   const [guardando, setGuardando] = useState(false)
   const [formError, setFormError] = useState(null)
@@ -38,7 +45,7 @@ function Admin() {
         .from('habitaciones')
         .select('id, nombre, descripcion, precio_noche, capacidad, imagen_url')
         .order('created_at', { ascending: true }),
-      supabase.from('posadas').select('id').limit(1),
+      supabase.from('posadas').select('id, tasa_cambio').limit(1),
       supabase
         .from('reservas')
         .select(
@@ -70,6 +77,7 @@ function Admin() {
 
     if (!posadas.error && posadas.data.length > 0) {
       setPosadaId(posadas.data[0].id)
+      setTasaActual(Number(posadas.data[0].tasa_cambio))
     }
 
     setCargando(false)
@@ -147,6 +155,38 @@ function Admin() {
     navigate('/login', { replace: true })
   }
 
+  const handleActualizarTasa = async (e) => {
+    e.preventDefault()
+    setTasaError(null)
+    setTasaOk(false)
+
+    const valor = Number(nuevaTasa)
+    if (!posadaId) {
+      setTasaError('No hay una posada registrada.')
+      return
+    }
+    if (!Number.isFinite(valor) || valor <= 0) {
+      setTasaError('Escribe una tasa válida (ej. 56.40).')
+      return
+    }
+
+    setActualizandoTasa(true)
+    const { error } = await supabase
+      .from('posadas')
+      .update({ tasa_cambio: valor })
+      .eq('id', posadaId)
+    setActualizandoTasa(false)
+
+    if (error) {
+      setTasaError(error.message)
+      return
+    }
+
+    setTasaActual(valor)
+    setNuevaTasa('')
+    setTasaOk(true)
+  }
+
   const handleConfirmarPago = async (reserva) => {
     setError(null)
     setConfirmandoId(reserva.id)
@@ -216,7 +256,7 @@ function Admin() {
               onClick={handleLogout}
               className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-red-700 active:scale-95"
             >
-              Cerrar Sesión
+              Salir 🚪
             </button>
           </div>
           <h1 className="mt-3 text-2xl font-bold sm:text-3xl">
@@ -243,6 +283,68 @@ function Admin() {
             color="text-slate-500"
           />
         </div>
+
+        {/* Superpoder del dueño: tasa de cambio */}
+        <section className="mt-8 rounded-2xl bg-gradient-to-br from-emerald-600 to-slate-900 p-5 text-white shadow-md sm:p-6">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-emerald-300">
+                Tasa de cambio (Bs por $)
+              </p>
+              <p className="mt-1 text-3xl font-bold">
+                Tasa actual: Bs {tasaActual !== null ? tasaActual : '—'}
+              </p>
+              <p className="mt-1 text-sm text-slate-300">
+                Cambiarla actualiza los precios en Bs de toda la web.
+              </p>
+            </div>
+
+            <form
+              onSubmit={handleActualizarTasa}
+              className="flex flex-wrap items-end gap-3"
+            >
+              <div>
+                <label
+                  htmlFor="nuevaTasa"
+                  className="block text-xs font-semibold text-emerald-200"
+                >
+                  Nueva tasa
+                </label>
+                <input
+                  id="nuevaTasa"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={nuevaTasa}
+                  onChange={(e) => {
+                    setNuevaTasa(e.target.value)
+                    setTasaOk(false)
+                  }}
+                  placeholder="56.40"
+                  className="mt-1.5 w-32 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-white placeholder:text-slate-400 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-300/40"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={actualizandoTasa}
+                className="rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-400 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {actualizandoTasa ? 'Actualizando…' : 'Actualizar Tasa'}
+              </button>
+            </form>
+          </div>
+
+          {tasaError && (
+            <p className="mt-3 rounded-lg bg-red-500/20 px-3 py-2 text-sm font-semibold text-red-100 ring-1 ring-red-300/40">
+              {tasaError}
+            </p>
+          )}
+          {tasaOk && (
+            <p className="mt-3 rounded-lg bg-emerald-400/20 px-3 py-2 text-sm font-semibold text-emerald-50 ring-1 ring-emerald-300/40">
+              ✓ Tasa actualizada. Los nuevos cálculos ya usan Bs {tasaActual}.
+            </p>
+          )}
+        </section>
 
         {/* Formulario: añadir / editar habitación */}
         <section className="mt-8 rounded-2xl bg-white p-5 shadow-md ring-1 ring-slate-200 sm:p-6">
