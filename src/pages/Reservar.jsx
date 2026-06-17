@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+
+// Fecha de hoy en formato YYYY-MM-DD para bloquear fechas pasadas.
+const HOY = new Date().toISOString().slice(0, 10)
 
 const FORM_VACIO = {
   nombre: '',
@@ -25,6 +28,7 @@ const DATOS_PAGO_MOVIL = {
 function Reservar() {
   // La habitación se identifica por UUID en la ruta (/reservar/:id).
   const { id: habitacionId } = useParams()
+  const navigate = useNavigate()
 
   const [habitacion, setHabitacion] = useState(null)
   const [tasaCambio, setTasaCambio] = useState(null)
@@ -199,9 +203,12 @@ function Reservar() {
     })
     setExito(true)
     setForm(FORM_VACIO)
+  }
 
-    // Confirmación visual simple para el huésped.
-    window.alert('Reserva realizada con éxito')
+  // Cierra el modal de éxito y manda al huésped al inicio.
+  const handleCerrarExito = () => {
+    setExito(false)
+    navigate('/')
   }
 
   // Mensaje automático de WhatsApp con el formato pedido.
@@ -257,60 +264,6 @@ function Reservar() {
               Ver habitaciones
             </Link>
           </div>
-        ) : exito && confirmacion ? (
-          /* ---------- Pantalla final: reserva registrada + WhatsApp ---------- */
-          <div className="rounded-2xl bg-white p-6 shadow-md ring-1 ring-emerald-200 sm:p-8">
-            <h2 className="text-xl font-bold text-emerald-700">
-              ¡Reserva registrada! 🎉
-            </h2>
-            <p className="mt-2 text-slate-600">
-              Tu reserva para{' '}
-              <span className="font-semibold">{confirmacion.habitacion}</span>{' '}
-              quedó en estado <span className="font-semibold">pendiente</span>.
-            </p>
-
-            <div className="mt-4 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="text-sm font-semibold text-slate-700">
-                  Total
-                </span>
-                <span className="text-right">
-                  <span className="block text-xl font-bold text-slate-900">
-                    ${confirmacion.total} USD
-                  </span>
-                  {confirmacion.totalBs > 0 && (
-                    <span className="block text-sm text-slate-500">
-                      Bs {formatoBs(confirmacion.totalBs)}
-                    </span>
-                  )}
-                </span>
-              </div>
-              <p className="mt-2 border-t border-slate-200 pt-2 text-sm text-slate-600">
-                Referencia: {confirmacion.referencia}
-              </p>
-            </div>
-
-            <p className="mt-4 text-sm text-slate-600">
-              Envíanos el comprobante por WhatsApp para confirmar tu pago:
-            </p>
-            <div className="mt-3 flex flex-wrap gap-3">
-              {/* Botón verde brillante de WhatsApp */}
-              <a
-                href={enlaceWhatsApp(confirmacion)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-lg bg-green-500 px-5 py-3 text-base font-bold text-white shadow-lg shadow-green-500/40 transition hover:bg-green-600 active:scale-[0.98]"
-              >
-                💬 Avisar por WhatsApp
-              </a>
-              <Link
-                to="/"
-                className="inline-flex items-center rounded-lg bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-200"
-              >
-                Volver al inicio
-              </Link>
-            </div>
-          </div>
         ) : (
           /* ---------- Formulario de reserva ---------- */
           <form
@@ -331,6 +284,7 @@ function Reservar() {
                   name="llegada"
                   type="date"
                   required
+                  min={HOY}
                   value={form.llegada}
                   onChange={handleChange}
                   className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
@@ -348,6 +302,7 @@ function Reservar() {
                   name="salida"
                   type="date"
                   required
+                  min={form.llegada || HOY}
                   value={form.salida}
                   onChange={handleChange}
                   className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
@@ -536,6 +491,60 @@ function Reservar() {
           </form>
         )}
       </main>
+
+      {/* Modal de confirmación elegante */}
+      {exito && confirmacion && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-2xl sm:p-8">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-3xl">
+              ✨
+            </div>
+            <h2 className="mt-4 text-xl font-bold text-slate-900">
+              ¡Reserva registrada con éxito!
+            </h2>
+            <p className="mt-2 text-slate-600">
+              El dueño verificará tu pago.
+            </p>
+
+            <div className="mt-4 rounded-xl bg-slate-50 p-4 text-left ring-1 ring-slate-200">
+              <p className="text-sm text-slate-600">
+                {confirmacion.habitacion}
+              </p>
+              <p className="mt-1 text-lg font-bold text-slate-900">
+                ${confirmacion.total} USD
+                {confirmacion.totalBs > 0 && (
+                  <span className="text-emerald-700">
+                    {' '}
+                    (Bs {formatoBs(confirmacion.totalBs)})
+                  </span>
+                )}
+              </p>
+              <p className="mt-1 text-sm text-slate-500">
+                Referencia: {confirmacion.referencia}
+              </p>
+            </div>
+
+            <div className="mt-5 flex flex-col gap-3">
+              {/* Botón verde brillante de WhatsApp */}
+              <a
+                href={enlaceWhatsApp(confirmacion)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-500 px-5 py-3 text-base font-bold text-white shadow-lg shadow-green-500/40 transition hover:bg-green-600 active:scale-[0.98]"
+              >
+                💬 Avisar por WhatsApp
+              </a>
+              <button
+                type="button"
+                onClick={handleCerrarExito}
+                className="rounded-lg bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-200"
+              >
+                Cerrar e ir al inicio
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
