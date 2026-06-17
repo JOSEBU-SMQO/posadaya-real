@@ -525,11 +525,13 @@ function Reservar() {
             </div>
 
             <div className="mt-5 flex flex-col gap-3">
-              {/* Botón verde brillante de WhatsApp */}
+              {/* Botón verde brillante de WhatsApp.
+                  Abre WhatsApp en otra pestaña y lleva a la página de Éxito. */}
               <a
                 href={enlaceWhatsApp(confirmacion)}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() => navigate('/exito')}
                 className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-500 px-5 py-3 text-base font-bold text-white shadow-lg shadow-green-500/40 transition hover:bg-green-600 active:scale-[0.98]"
               >
                 💬 Avisar por WhatsApp
