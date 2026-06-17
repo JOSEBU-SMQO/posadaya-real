@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
 const FORM_VACIO = {
@@ -11,6 +11,7 @@ const FORM_VACIO = {
 }
 
 function Admin() {
+  const navigate = useNavigate()
   const [habitaciones, setHabitaciones] = useState([])
   const [reservas, setReservas] = useState([])
   const [posadaId, setPosadaId] = useState(null)
@@ -141,6 +142,11 @@ function Admin() {
     setFormError(null)
   }
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    navigate('/login', { replace: true })
+  }
+
   const handleConfirmarPago = async (reserva) => {
     setError(null)
     setConfirmandoId(reserva.id)
@@ -198,12 +204,21 @@ function Admin() {
       {/* Cabecera */}
       <header className="bg-gradient-to-br from-slate-900 to-emerald-900 text-white">
         <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
-          <Link
-            to="/"
-            className="text-sm font-semibold text-emerald-400 hover:text-emerald-300"
-          >
-            ← Volver al inicio
-          </Link>
+          <div className="flex items-start justify-between gap-4">
+            <Link
+              to="/"
+              className="text-sm font-semibold text-emerald-400 hover:text-emerald-300"
+            >
+              ← Volver al inicio
+            </Link>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-red-700 active:scale-95"
+            >
+              Cerrar Sesión
+            </button>
+          </div>
           <h1 className="mt-3 text-2xl font-bold sm:text-3xl">
             Panel de administración
           </h1>
@@ -421,10 +436,17 @@ function Admin() {
           )}
         </div>
 
-        {/* Reservas recibidas */}
-        <h2 className="mt-10 text-lg font-bold text-slate-900">
-          Reservas recibidas
-        </h2>
+        {/* Sección: Reservas */}
+        <div className="mt-10 flex items-center gap-3 border-b border-slate-200 pb-2">
+          <h2 className="text-xl font-bold text-slate-900">Reservas</h2>
+          <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
+            {reservas.length}
+          </span>
+        </div>
+        <p className="mt-1 text-sm text-slate-500">
+          Personas que han reservado: nombre, habitación, fecha, total y
+          referencia.
+        </p>
         <div className="mt-4 overflow-hidden rounded-2xl bg-white shadow-md ring-1 ring-slate-200">
           {cargando ? (
             <p className="px-5 py-6 text-sm text-slate-500">Cargando…</p>

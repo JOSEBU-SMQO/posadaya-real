@@ -416,17 +416,14 @@ function Reservar() {
                 el huésped no la escribe). */}
             {noches > 0 && (
               <div className="mt-5 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
-                <p className="text-sm text-slate-600">
-                  {noches} {noches === 1 ? 'noche' : 'noches'} × $
-                  {habitacion.precio_noche} ={' '}
-                  <span className="font-semibold text-slate-900">${total}</span>
-                </p>
-                <p className="mt-3 border-t border-slate-200 pt-3 text-lg font-bold text-slate-900">
-                  Total: ${total}
+                <p className="text-base font-bold text-slate-900">
+                  Total a pagar: {noches}{' '}
+                  {noches === 1 ? 'noche' : 'noches'} × ${habitacion.precio_noche}{' '}
+                  = ${total}
                   {totalBs > 0 && (
                     <span className="text-emerald-700">
                       {' '}
-                      (Bs {formatoBs(totalBs)})
+                      (Equivalente a Bs {formatoBs(totalBs)})
                     </span>
                   )}
                 </p>
